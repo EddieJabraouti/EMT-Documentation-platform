@@ -6,18 +6,25 @@ import { QuestionStep } from "@/components/QuestionStep";
 import { ReportPreview } from "@/components/ReportPreview";
 import { CompletionChecklist } from "@/components/CompletionChecklist";
 import { GeneratedReport } from "@/components/GeneratedReport";
+import { SavedReports } from "@/components/SavedReports";
+import { ViewReport } from "@/components/ViewReport";
 import { questions, getTotalSteps } from "@/lib/schema";
-import { generateReportId } from "@/lib/storage";
-import { GeneratedReportResponse } from "@/types/report";
+import { generateReportId } from "@/lib/utils";
+import { GeneratedReportResponse, SavedReport } from "@/types/report";
 import { ReportData } from "@/types/report";
 
+type ViewMode = "home" | "new-report" | "saved-reports" | "view-report";
+
 export default function Home() {
-  const [hasStarted, setHasStarted] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("home");
   const [generatedReportText, setGeneratedReportText] = useState<string | null>(null);
   const [reportId, setReportId] = useState<string | null>(null);
+  const [qaStatus, setQaStatus] = useState<"complete" | "needs-review" | null>(null);
+  const [qaStatusMessage, setQaStatusMessage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [reportDataToGenerate, setReportDataToGenerate] = useState<ReportData | null>(null);
+  const [viewingReport, setViewingReport] = useState<SavedReport | null>(null);
   const generationTriggeredRef = useRef<string | null>(null);
 
   // Generate report when validation passes
@@ -52,6 +59,8 @@ export default function Home() {
         })
         .then((result: GeneratedReportResponse) => {
           setGeneratedReportText(result.generatedText);
+          setQaStatus(result.qaStatus);
+          setQaStatusMessage(result.qaStatusMessage);
           setIsGenerating(false);
         })
         .catch((err) => {
@@ -62,7 +71,7 @@ export default function Home() {
     }
   }, [reportDataToGenerate, generatedReportText, isGenerating, generationError]);
 
-  if (!hasStarted) {
+  if (viewMode === "home") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
@@ -73,14 +82,43 @@ export default function Home() {
             Create a guided, complete EMS report in minutes. Our step-by-step process
             ensures all required fields are captured.
           </p>
-          <button
-            onClick={() => setHasStarted(true)}
-            className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold text-lg"
-          >
-            New EMS Report
-          </button>
+          <div className="space-y-3">
+            <button
+              onClick={() => setViewMode("new-report")}
+              className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold text-lg"
+            >
+              New EMS Report
+            </button>
+            <button
+              onClick={() => setViewMode("saved-reports")}
+              className="w-full px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-semibold"
+            >
+              View Saved Reports
+            </button>
+          </div>
         </div>
       </div>
+    );
+  }
+
+  if (viewMode === "saved-reports") {
+    return (
+      <SavedReports
+        onViewReport={(report) => {
+          setViewingReport(report);
+          setViewMode("view-report");
+        }}
+        onBack={() => setViewMode("home")}
+      />
+    );
+  }
+
+  if (viewMode === "view-report" && viewingReport) {
+    return (
+      <ViewReport
+        report={viewingReport}
+        onBack={() => setViewMode("saved-reports")}
+      />
     );
   }
 
@@ -106,29 +144,37 @@ export default function Home() {
               reportData={state.data}
               generatedText={generatedReportText}
               reportId={reportId}
+              qaStatus={qaStatus!}
+              qaStatusMessage={qaStatusMessage!}
               onSave={() => {
                 setGeneratedReportText(null);
                 setReportId(null);
+                setQaStatus(null);
+                setQaStatusMessage(null);
                 setReportDataToGenerate(null);
                 generationTriggeredRef.current = null;
                 actions.reset();
-                setHasStarted(false);
+                setViewMode("home");
               }}
               onDiscard={() => {
                 setGeneratedReportText(null);
                 setReportId(null);
+                setQaStatus(null);
+                setQaStatusMessage(null);
                 setReportDataToGenerate(null);
                 generationTriggeredRef.current = null;
                 actions.reset();
-                setHasStarted(false);
+                setViewMode("home");
               }}
               onRegenerate={() => {
                 setGeneratedReportText(null);
                 setReportId(null);
+                setQaStatus(null);
+                setQaStatusMessage(null);
                 setReportDataToGenerate(null);
                 generationTriggeredRef.current = null;
                 actions.reset();
-                setHasStarted(false);
+                setViewMode("new-report");
               }}
             />
           );
@@ -182,10 +228,12 @@ export default function Home() {
                         setGenerationError(null);
                         setGeneratedReportText(null);
                         setReportId(null);
+                        setQaStatus(null);
+                        setQaStatusMessage(null);
                         setReportDataToGenerate(null);
                         generationTriggeredRef.current = null;
                         actions.reset();
-                        setHasStarted(false);
+                        setViewMode("home");
                       }}
                       className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                     >
@@ -207,9 +255,11 @@ export default function Home() {
                   <button
                     onClick={() => {
                       actions.reset();
-                      setHasStarted(false);
+                      setViewMode("home");
                       setGeneratedReportText(null);
                       setReportId(null);
+                      setQaStatus(null);
+                      setQaStatusMessage(null);
                       setReportDataToGenerate(null);
                       generationTriggeredRef.current = null;
                     }}
@@ -251,11 +301,11 @@ export default function Home() {
                 <button
                   onClick={() => {
                     actions.reset();
-                    setHasStarted(false);
+                    setViewMode("home");
                   }}
                   className="text-blue-600 hover:text-blue-800"
                 >
-                  ← Back to Start
+                  ← Back to Home
                 </button>
               </div>
 

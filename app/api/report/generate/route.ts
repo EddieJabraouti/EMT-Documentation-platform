@@ -14,9 +14,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const generatedText = generateReportText(data);
+    const { text: generatedText, qaStatus } = generateReportText(data);
 
-    return NextResponse.json({ generatedText });
+    const qaStatusMessage = qaStatus === "complete" 
+      ? "Complete – Ready for Submission"
+      : "Needs Review";
+
+    return NextResponse.json({ 
+      generatedText,
+      qaStatus,
+      qaStatusMessage
+    });
   } catch (error) {
     console.error("Error generating report:", error);
     return NextResponse.json(

@@ -39,8 +39,22 @@ export type ReportState = {
   validationResults: ValidationResults | null;
 };
 
+export type QAStatus = "complete" | "needs-review";
+
 export type GeneratedReportResponse = {
   generatedText: string;
+  qaStatus: QAStatus;
+  qaStatusMessage: string;
+};
+
+export type SavedReport = {
+  reportId: string;
+  title: string;
+  timestamp: number;
+  data: ReportData;
+  generatedText: string;
+  qaStatus: QAStatus;
+  qaStatusMessage: string;
 };
 
 export type SaveReportRequest = {

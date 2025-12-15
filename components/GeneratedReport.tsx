@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ReportData, SaveReportResponse, DiscardReportResponse } from "@/types/report";
+import { ReportData, QAStatus } from "@/types/report";
+import { saveReportToLocalStorage } from "@/lib/localStorage";
 
 interface GeneratedReportProps {
   reportData: ReportData;
   generatedText: string;
   reportId: string;
+  qaStatus: QAStatus;
+  qaStatusMessage: string;
   onSave: () => void;
   onDiscard: () => void;
   onRegenerate: () => void;
@@ -16,84 +19,41 @@ export function GeneratedReport({
   reportData,
   generatedText,
   reportId,
+  qaStatus,
+  qaStatusMessage,
   onSave,
   onDiscard,
   onRegenerate,
 }: GeneratedReportProps) {
   const [isSaving, setIsSaving] = useState(false);
-  const [isDiscarding, setIsDiscarding] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [discardConfirmed, setDiscardConfirmed] = useState(false);
-  const [discardSuccess, setDiscardSuccess] = useState(false);
+  const [showDiscardPopup, setShowDiscardPopup] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSave = async () => {
+  const handleSave = () => {
     setIsSaving(true);
     setError(null);
 
     try {
-      const response = await fetch("/api/report/save", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          reportId,
-          data: reportData,
-          generatedText,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to save report");
-      }
-
-      const result: SaveReportResponse = await response.json();
-      if (result.success) {
-        setSaveSuccess(true);
-        setTimeout(() => {
-          onSave();
-        }, 2000);
-      }
+      const savedReportId = saveReportToLocalStorage(
+        reportData,
+        generatedText,
+        qaStatus,
+        qaStatusMessage
+      );
+      
+      setSaveSuccess(true);
+      setTimeout(() => {
+        onSave();
+      }, 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save report");
-    } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDiscard = async () => {
-    if (!discardConfirmed) {
-      setDiscardConfirmed(true);
-      return;
-    }
-
-    setIsDiscarding(true);
-    setError(null);
-
-    try {
-      const response = await fetch("/api/report/discard", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          reportId,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to discard report");
-      }
-
-      const result: DiscardReportResponse = await response.json();
-      if (result.success) {
-        setDiscardSuccess(true);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to discard report");
-      setIsDiscarding(false);
-    }
+  const handleDiscard = () => {
+    setShowDiscardPopup(true);
   };
 
   if (saveSuccess) {
@@ -120,72 +80,30 @@ export function GeneratedReport({
     );
   }
 
-  if (discardSuccess) {
+  if (showDiscardPopup) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-lg shadow-md p-6 text-center">
+      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-lg shadow-lg p-6 text-center">
             <div className="text-4xl mb-4">🗑️</div>
-            <h2 className="text-2xl font-semibold text-gray-800 mb-2">
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">
               Report Discarded
             </h2>
             <p className="text-gray-600 mb-6">
-              The report has been discarded successfully.
+              Report discarded. It was not saved.
             </p>
-            <div className="space-y-3">
-              <p className="text-lg font-medium text-gray-700 mb-4">
-                Would you like to generate another report?
-              </p>
-              <div className="flex gap-3 justify-center">
-                <button
-                  onClick={onRegenerate}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
-                >
-                  Yes, Generate New Report
-                </button>
-                <button
-                  onClick={onDiscard}
-                  className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  No, Return to Start
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (discardConfirmed) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-4">
-              Discard This Report?
-            </h2>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to discard this report? This action cannot be undone.
-            </p>
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700">
-                {error}
-              </div>
-            )}
-            <div className="flex gap-3">
+            <div className="flex gap-3 justify-center">
               <button
-                onClick={() => setDiscardConfirmed(false)}
-                className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                onClick={onRegenerate}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
               >
-                Cancel
+                Generate Another Report
               </button>
               <button
-                onClick={handleDiscard}
-                disabled={isDiscarding}
-                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                onClick={onDiscard}
+                className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                {isDiscarding ? "Discarding..." : "Yes, Discard Report"}
+                Return to Home
               </button>
             </div>
           </div>
@@ -198,9 +116,18 @@ export function GeneratedReport({
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Generated EMS Report
-          </h1>
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-3xl font-bold text-gray-800">
+              Generated EMS Report
+            </h1>
+            <div className={`px-4 py-2 rounded-lg font-semibold ${
+              qaStatus === "complete"
+                ? "bg-green-100 text-green-800"
+                : "bg-yellow-100 text-yellow-800"
+            }`}>
+              {qaStatusMessage}
+            </div>
+          </div>
           <p className="text-gray-600">
             Review the generated report below. You can save it or discard it and generate a new one.
           </p>
@@ -228,8 +155,7 @@ export function GeneratedReport({
           </button>
           <button
             onClick={handleDiscard}
-            disabled={isDiscarding}
-            className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-semibold"
+            className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
           >
             Discard Report
           </button>

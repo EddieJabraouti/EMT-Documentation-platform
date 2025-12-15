@@ -1,4 +1,5 @@
 import { ReportData } from "@/types/report";
+import { generateReportId } from "./utils";
 
 type StoredReport = {
   data: ReportData;
@@ -7,10 +8,6 @@ type StoredReport = {
 };
 
 const reports: Record<string, StoredReport> = {};
-
-export function generateReportId(): string {
-  return `report_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-}
 
 export function saveReport(
   reportId: string,

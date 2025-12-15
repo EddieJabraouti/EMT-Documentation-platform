@@ -1,50 +1,116 @@
-import { ReportData } from "@/types/report";
+import { ReportData, QAStatus } from "@/types/report";
 
-export function generateReportText(data: ReportData): string {
-  const formatValue = (value: string): string => {
+export function generateReportText(data: ReportData): { text: string; qaStatus: QAStatus } {
+  const formatValue = (value: string, allowUnknown: boolean = true): string => {
     if (!value || value.trim() === "") {
-      return "Not provided";
+      return "";
     }
     const lower = value.toLowerCase().trim();
-    if (lower === "unknown") {
+    if (lower === "unknown" && allowUnknown) {
       return "Unknown";
     }
     return value.trim();
   };
 
-  const formatSection = (title: string, content: string): string => {
-    if (!content || content.trim() === "" || content.toLowerCase().trim() === "unknown") {
-      return `\n${title}\n${content.trim() || "Not provided"}\n`;
+  const formatDemographics = (): string => {
+    const age = formatValue(data.patientAge);
+    const gender = formatValue(data.patientGender);
+    
+    if (!age && !gender) {
+      return "";
     }
-    return `\n${title}\n${content.trim()}\n`;
+    
+    let demo = "";
+    if (age) demo += `${age} year old`;
+    if (age && gender) demo += " ";
+    if (gender) demo += gender;
+    return demo.trim();
   };
 
-  let report = "=".repeat(60);
-  report += "\nEMS PATIENT CARE REPORT\n";
-  report += "=".repeat(60);
+  const generateReportTitle = (): string => {
+    const complaint = data.chiefComplaint?.toLowerCase() || "";
+    const demographics = formatDemographics();
+    
+    // Extract key complaint words
+    const complaintWords = complaint.split(/\s+/).slice(0, 3).join(" ");
+    const title = complaintWords || "Patient Care";
+    
+    if (demographics) {
+      return `${title.charAt(0).toUpperCase() + title.slice(1)} – ${demographics}`;
+    }
+    return title.charAt(0).toUpperCase() + title.slice(1);
+  };
 
-  report += formatSection("PATIENT DEMOGRAPHICS", "");
-  report += `Age: ${formatValue(data.patientAge)}\n`;
-  report += `Gender: ${formatValue(data.patientGender)}\n`;
+  let report = "";
+  report += "=".repeat(70) + "\n";
+  report += "EMS PATIENT CARE REPORT\n";
+  report += "=".repeat(70) + "\n\n";
 
-  report += formatSection("CHIEF COMPLAINT", data.chiefComplaint);
-
-  report += formatSection("INCIDENT LOCATION", data.incidentLocation);
-
-  report += formatSection("ASSESSMENT SUMMARY", data.assessmentSummary);
-
-  if (data.interventionsPerformed && data.interventionsPerformed.trim() !== "") {
-    report += formatSection("INTERVENTIONS PERFORMED", data.interventionsPerformed);
-  } else {
-    report += formatSection("INTERVENTIONS PERFORMED", "None documented");
+  // Patient Demographics
+  const demographics = formatDemographics();
+  if (demographics) {
+    report += "PATIENT DEMOGRAPHICS\n";
+    report += "-".repeat(70) + "\n";
+    if (data.patientAge) report += `Age: ${formatValue(data.patientAge)}\n`;
+    if (data.patientGender) report += `Gender: ${formatValue(data.patientGender)}\n`;
+    report += "\n";
   }
 
-  report += formatSection("TRANSPORT OUTCOME", data.transportOutcome);
+  // Chief Complaint
+  if (data.chiefComplaint && data.chiefComplaint.trim() !== "" && data.chiefComplaint.toLowerCase() !== "unknown") {
+    report += "CHIEF COMPLAINT\n";
+    report += "-".repeat(70) + "\n";
+    report += data.chiefComplaint.trim() + "\n";
+    report += "\n";
+  }
 
-  report += "\n" + "=".repeat(60);
-  report += "\nEnd of Report\n";
-  report += "=".repeat(60);
+  // Incident Location
+  if (data.incidentLocation && data.incidentLocation.trim() !== "" && data.incidentLocation.toLowerCase() !== "unknown") {
+    report += "INCIDENT LOCATION\n";
+    report += "-".repeat(70) + "\n";
+    report += data.incidentLocation.trim() + "\n";
+    report += "\n";
+  }
 
-  return report;
+  // Assessment Summary
+  if (data.assessmentSummary && data.assessmentSummary.trim() !== "" && data.assessmentSummary.toLowerCase() !== "unknown") {
+    report += "ASSESSMENT SUMMARY\n";
+    report += "-".repeat(70) + "\n";
+    report += data.assessmentSummary.trim() + "\n";
+    report += "\n";
+  }
+
+  // Interventions Performed
+  if (data.interventionsPerformed && data.interventionsPerformed.trim() !== "" && data.interventionsPerformed.toLowerCase() !== "unknown") {
+    report += "INTERVENTIONS PERFORMED\n";
+    report += "-".repeat(70) + "\n";
+    report += data.interventionsPerformed.trim() + "\n";
+    report += "\n";
+  }
+
+  // Transport Outcome
+  if (data.transportOutcome && data.transportOutcome.trim() !== "" && data.transportOutcome.toLowerCase() !== "unknown") {
+    report += "TRANSPORT OUTCOME\n";
+    report += "-".repeat(70) + "\n";
+    report += data.transportOutcome.trim() + "\n";
+    report += "\n";
+  }
+
+  report += "=".repeat(70) + "\n";
+  report += "End of Report\n";
+  report += "=".repeat(70);
+
+  // Determine QA status
+  const hasRequiredFields = 
+    data.patientAge && data.patientAge.trim() !== "" && data.patientAge.toLowerCase() !== "unknown" &&
+    data.patientGender && data.patientGender.trim() !== "" && data.patientGender.toLowerCase() !== "unknown" &&
+    data.chiefComplaint && data.chiefComplaint.trim() !== "" && data.chiefComplaint.toLowerCase() !== "unknown" &&
+    data.incidentLocation && data.incidentLocation.trim() !== "" && data.incidentLocation.toLowerCase() !== "unknown" &&
+    data.assessmentSummary && data.assessmentSummary.trim() !== "" && data.assessmentSummary.toLowerCase() !== "unknown" &&
+    data.transportOutcome && data.transportOutcome.trim() !== "" && data.transportOutcome.toLowerCase() !== "unknown";
+
+  const qaStatus: QAStatus = hasRequiredFields ? "complete" : "needs-review";
+
+  return { text: report, qaStatus };
 }
 
