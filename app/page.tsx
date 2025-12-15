@@ -1,14 +1,66 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ConversationFlow } from "@/components/ConversationFlow";
 import { QuestionStep } from "@/components/QuestionStep";
 import { ReportPreview } from "@/components/ReportPreview";
 import { CompletionChecklist } from "@/components/CompletionChecklist";
+import { GeneratedReport } from "@/components/GeneratedReport";
 import { questions, getTotalSteps } from "@/lib/schema";
+import { generateReportId } from "@/lib/storage";
+import { GeneratedReportResponse } from "@/types/report";
+import { ReportData } from "@/types/report";
 
 export default function Home() {
   const [hasStarted, setHasStarted] = useState(false);
+  const [generatedReportText, setGeneratedReportText] = useState<string | null>(null);
+  const [reportId, setReportId] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [reportDataToGenerate, setReportDataToGenerate] = useState<ReportData | null>(null);
+  const generationTriggeredRef = useRef<string | null>(null);
+
+  // Generate report when validation passes
+  useEffect(() => {
+    if (
+      reportDataToGenerate &&
+      !generatedReportText &&
+      !isGenerating &&
+      !generationError &&
+      generationTriggeredRef.current !== JSON.stringify(reportDataToGenerate)
+    ) {
+      setIsGenerating(true);
+      setGenerationError(null);
+      const newReportId = generateReportId();
+      setReportId(newReportId);
+      generationTriggeredRef.current = JSON.stringify(reportDataToGenerate);
+
+      fetch("/api/report/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          data: reportDataToGenerate,
+        }),
+      })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error("Failed to generate report");
+          }
+          return res.json();
+        })
+        .then((result: GeneratedReportResponse) => {
+          setGeneratedReportText(result.generatedText);
+          setIsGenerating(false);
+        })
+        .catch((err) => {
+          setGenerationError(err instanceof Error ? err.message : "Failed to generate report");
+          setIsGenerating(false);
+          generationTriggeredRef.current = null;
+        });
+    }
+  }, [reportDataToGenerate, generatedReportText, isGenerating, generationError]);
 
   if (!hasStarted) {
     return (
@@ -35,6 +87,118 @@ export default function Home() {
   return (
     <ConversationFlow>
       {(state, actions) => {
+        // Trigger report generation when validation passes
+        if (
+          state.isComplete &&
+          state.validationResults &&
+          state.validationResults.status === "ready" &&
+          !reportDataToGenerate &&
+          !generatedReportText &&
+          !isGenerating
+        ) {
+          setReportDataToGenerate(state.data);
+        }
+
+        // Show generated report if available
+        if (generatedReportText && reportId) {
+          return (
+            <GeneratedReport
+              reportData={state.data}
+              generatedText={generatedReportText}
+              reportId={reportId}
+              onSave={() => {
+                setGeneratedReportText(null);
+                setReportId(null);
+                setReportDataToGenerate(null);
+                generationTriggeredRef.current = null;
+                actions.reset();
+                setHasStarted(false);
+              }}
+              onDiscard={() => {
+                setGeneratedReportText(null);
+                setReportId(null);
+                setReportDataToGenerate(null);
+                generationTriggeredRef.current = null;
+                actions.reset();
+                setHasStarted(false);
+              }}
+              onRegenerate={() => {
+                setGeneratedReportText(null);
+                setReportId(null);
+                setReportDataToGenerate(null);
+                generationTriggeredRef.current = null;
+                actions.reset();
+                setHasStarted(false);
+              }}
+            />
+          );
+        }
+
+        // Show loading state while generating
+        if (isGenerating) {
+          return (
+            <div className="min-h-screen bg-gray-50 p-6">
+              <div className="max-w-4xl mx-auto">
+                <div className="bg-white rounded-lg shadow-md p-8 text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <h2 className="text-xl font-semibold text-gray-800 mb-2">
+                    Generating Report...
+                  </h2>
+                  <p className="text-gray-600">
+                    Please wait while we format your report.
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // Show error state if generation failed
+        if (generationError) {
+          return (
+            <div className="min-h-screen bg-gray-50 p-6">
+              <div className="max-w-4xl mx-auto">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+                  <h2 className="text-xl font-semibold text-red-800 mb-2">
+                    Error Generating Report
+                  </h2>
+                  <p className="text-red-700 mb-4">{generationError}</p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        setGenerationError(null);
+                        setGeneratedReportText(null);
+                        setReportId(null);
+                        setReportDataToGenerate(null);
+                        generationTriggeredRef.current = null;
+                        actions.resetCompletion();
+                      }}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Try Again
+                    </button>
+                    <button
+                      onClick={() => {
+                        setGenerationError(null);
+                        setGeneratedReportText(null);
+                        setReportId(null);
+                        setReportDataToGenerate(null);
+                        generationTriggeredRef.current = null;
+                        actions.reset();
+                        setHasStarted(false);
+                      }}
+                      className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Start Over
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // Show checklist if validation complete but not ready
         if (state.isComplete && state.validationResults) {
           return (
             <div className="min-h-screen bg-gray-50 p-6">
@@ -44,6 +208,10 @@ export default function Home() {
                     onClick={() => {
                       actions.reset();
                       setHasStarted(false);
+                      setGeneratedReportText(null);
+                      setReportId(null);
+                      setReportDataToGenerate(null);
+                      generationTriggeredRef.current = null;
                     }}
                     className="text-blue-600 hover:text-blue-800 mb-4"
                   >
@@ -57,23 +225,14 @@ export default function Home() {
                     const stepIndex = questions.findIndex((q) => q.id === fieldId);
                     if (stepIndex !== -1) {
                       actions.resetCompletion();
+                      setGeneratedReportText(null);
+                      setReportId(null);
+                      setReportDataToGenerate(null);
+                      generationTriggeredRef.current = null;
                       actions.goToStep(stepIndex);
                     }
                   }}
                 />
-                {state.validationResults.status === "ready" && (
-                  <div className="mt-6 text-center">
-                    <button
-                      onClick={() => {
-                        actions.reset();
-                        setHasStarted(false);
-                      }}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
-                    >
-                      Create Another Report
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           );

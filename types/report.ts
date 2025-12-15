@@ -39,3 +39,26 @@ export type ReportState = {
   validationResults: ValidationResults | null;
 };
 
+export type GeneratedReportResponse = {
+  generatedText: string;
+};
+
+export type SaveReportRequest = {
+  reportId: string;
+  data: ReportData;
+  generatedText: string;
+};
+
+export type SaveReportResponse = {
+  success: boolean;
+  reportId: string;
+};
+
+export type DiscardReportRequest = {
+  reportId: string;
+};
+
+export type DiscardReportResponse = {
+  success: boolean;
+};
+
